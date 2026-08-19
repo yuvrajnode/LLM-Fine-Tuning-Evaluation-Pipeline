@@ -1,0 +1,418 @@
+{
+  "report_version": 2,
+  "generated_at": "2026-08-19T19:31:07Z",
+  "run": {
+    "name": "mistral7b-instruct-lora",
+    "base_model": "mistralai/Mistral-7B-Instruct-v0.2",
+    "checkpoint_dir": "checkpoints/sft-lora",
+    "dataset": "data/validation.jsonl",
+    "num_examples": 1024,
+    "lora": {
+      "r": 16,
+      "alpha": 32,
+      "dropout": 0.05
+    },
+    "decoding": {
+      "max_new_tokens": 256,
+      "temperature": 0.0,
+      "top_p": 1.0
+    }
+  },
+  "tasks": [
+    "exact_match",
+    "token_f1",
+    "rouge_l",
+    "contains_answer",
+    "length_ratio"
+  ],
+  "summary": {
+    "primary_metric": "exact_match",
+    "best": {
+      "name": "checkpoint-1200",
+      "step": 1200,
+      "stage": "sft",
+      "score": 0.5147
+    },
+    "baseline": {
+      "name": "base",
+      "score": 0.4118
+    },
+    "delta": 0.1029,
+    "delta_pct": 24.99
+  },
+  "timing": {
+    "wall_seconds": 3339.1,
+    "evaluated": 16,
+    "from_cache": 0,
+    "mean_seconds_per_checkpoint": 208.69,
+    "estimated_seconds_saved": 0.0
+  },
+  "checkpoints": [
+    {
+      "name": "base",
+      "path": "mistralai/Mistral-7B-Instruct-v0.2",
+      "step": 0,
+      "epoch": null,
+      "stage": "base",
+      "train_loss": null,
+      "eval_loss": null,
+      "is_base": true,
+      "meta": {
+        "note": "untuned reference model"
+      },
+      "metrics": {
+        "exact_match": 0.4118,
+        "token_f1": 0.5834,
+        "rouge_l": 0.6012,
+        "contains_answer": 0.6284,
+        "length_ratio": 1.443
+      },
+      "num_examples": 1024,
+      "seconds": 214.6,
+      "samples": [
+        {
+          "prompt": "### Instruction:\nSummarise the incident report in one sentence.\n\n### Response:\n",
+          "reference": "The migration exceeded its timeout window, which aborted the 3 March deployment.",
+          "prediction": "Sure! Here is a summary of the incident report you provided. The report describes a deployment that did not succeed, and there were several factors involved including timing and the migration process..."
+        }
+      ],
+      "from_cache": false
+    },
+    {
+      "name": "checkpoint-100",
+      "path": "checkpoints/sft-lora/checkpoint-100",
+      "step": 100,
+      "epoch": 0.2,
+      "stage": "sft",
+      "train_loss": 1.924,
+      "eval_loss": 1.8815,
+      "is_base": false,
+      "meta": {},
+      "metrics": {
+        "exact_match": 0.4265,
+        "token_f1": 0.6041,
+        "rouge_l": 0.6233,
+        "contains_answer": 0.6531,
+        "length_ratio": 1.312
+      },
+      "num_examples": 1024,
+      "seconds": 208.3,
+      "samples": [],
+      "from_cache": false
+    },
+    {
+      "name": "checkpoint-200",
+      "path": "checkpoints/sft-lora/checkpoint-200",
+      "step": 200,
+      "epoch": 0.4,
+      "stage": "sft",
+      "train_loss": 1.6903,
+      "eval_loss": 1.622,
+      "is_base": false,
+      "meta": {},
+      "metrics": {
+        "exact_match": 0.4412,
+        "token_f1": 0.6248,
+        "rouge_l": 0.6451,
+        "contains_answer": 0.6742,
+        "length_ratio": 1.2486
+      },
+      "num_examples": 1024,
+      "seconds": 208.3,
+      "samples": [],
+      "from_cache": false
+    },
+    {
+      "name": "checkpoint-300",
+      "path": "checkpoints/sft-lora/checkpoint-300",
+      "step": 300,
+      "epoch": 0.6,
+      "stage": "sft",
+      "train_loss": 1.5188,
+      "eval_loss": 1.4907,
+      "is_base": false,
+      "meta": {},
+      "metrics": {
+        "exact_match": 0.4559,
+        "token_f1": 0.6395,
+        "rouge_l": 0.6588,
+        "contains_answer": 0.6975,
+        "length_ratio": 1.2013
+      },
+      "num_examples": 1024,
+      "seconds": 208.3,
+      "samples": [],
+      "from_cache": false
+    },
+    {
+      "name": "checkpoint-400",
+      "path": "checkpoints/sft-lora/checkpoint-400",
+      "step": 400,
+      "epoch": 0.8,
+      "stage": "sft",
+      "train_loss": 1.3902,
+      "eval_loss": 1.3811,
+      "is_base": false,
+      "meta": {},
+      "metrics": {
+        "exact_match": 0.4676,
+        "token_f1": 0.6512,
+        "rouge_l": 0.6704,
+        "contains_answer": 0.7108,
+        "length_ratio": 1.1644
+      },
+      "num_examples": 1024,
+      "seconds": 208.3,
+      "samples": [],
+      "from_cache": false
+    },
+    {
+      "name": "checkpoint-500",
+      "path": "checkpoints/sft-lora/checkpoint-500",
+      "step": 500,
+      "epoch": 1.0,
+      "stage": "sft",
+      "train_loss": 1.2755,
+      "eval_loss": 1.2984,
+      "is_base": false,
+      "meta": {},
+      "metrics": {
+        "exact_match": 0.4794,
+        "token_f1": 0.6634,
+        "rouge_l": 0.6822,
+        "contains_answer": 0.7233,
+        "length_ratio": 1.1391
+      },
+      "num_examples": 1024,
+      "seconds": 208.3,
+      "samples": [],
+      "from_cache": false
+    },
+    {
+      "name": "checkpoint-600",
+      "path": "checkpoints/sft-lora/checkpoint-600",
+      "step": 600,
+      "epoch": 1.2,
+      "stage": "sft",
+      "train_loss": 1.184,
+      "eval_loss": 1.2301,
+      "is_base": false,
+      "meta": {},
+      "metrics": {
+        "exact_match": 0.4853,
+        "token_f1": 0.6721,
+        "rouge_l": 0.6907,
+        "contains_answer": 0.7346,
+        "length_ratio": 1.1187
+      },
+      "num_examples": 1024,
+      "seconds": 208.3,
+      "samples": [],
+      "from_cache": false
+    },
+    {
+      "name": "checkpoint-700",
+      "path": "checkpoints/sft-lora/checkpoint-700",
+      "step": 700,
+      "epoch": 1.4,
+      "stage": "sft",
+      "train_loss": 1.1032,
+      "eval_loss": 1.1746,
+      "is_base": false,
+      "meta": {},
+      "metrics": {
+        "exact_match": 0.4912,
+        "token_f1": 0.6806,
+        "rouge_l": 0.6994,
+        "contains_answer": 0.7412,
+        "length_ratio": 1.0998
+      },
+      "num_examples": 1024,
+      "seconds": 208.3,
+      "samples": [],
+      "from_cache": false
+    },
+    {
+      "name": "checkpoint-800",
+      "path": "checkpoints/sft-lora/checkpoint-800",
+      "step": 800,
+      "epoch": 1.6,
+      "stage": "sft",
+      "train_loss": 1.0311,
+      "eval_loss": 1.1288,
+      "is_base": false,
+      "meta": {},
+      "metrics": {
+        "exact_match": 0.4971,
+        "token_f1": 0.6883,
+        "rouge_l": 0.7062,
+        "contains_answer": 0.7488,
+        "length_ratio": 1.0864
+      },
+      "num_examples": 1024,
+      "seconds": 208.3,
+      "samples": [],
+      "from_cache": false
+    },
+    {
+      "name": "checkpoint-900",
+      "path": "checkpoints/sft-lora/checkpoint-900",
+      "step": 900,
+      "epoch": 1.8,
+      "stage": "sft",
+      "train_loss": 0.9688,
+      "eval_loss": 1.0902,
+      "is_base": false,
+      "meta": {},
+      "metrics": {
+        "exact_match": 0.5029,
+        "token_f1": 0.6948,
+        "rouge_l": 0.7121,
+        "contains_answer": 0.7534,
+        "length_ratio": 1.0752
+      },
+      "num_examples": 1024,
+      "seconds": 208.3,
+      "samples": [],
+      "from_cache": false
+    },
+    {
+      "name": "checkpoint-1000",
+      "path": "checkpoints/sft-lora/checkpoint-1000",
+      "step": 1000,
+      "epoch": 2.0,
+      "stage": "sft",
+      "train_loss": 0.9104,
+      "eval_loss": 1.0574,
+      "is_base": false,
+      "meta": {},
+      "metrics": {
+        "exact_match": 0.5088,
+        "token_f1": 0.7012,
+        "rouge_l": 0.7188,
+        "contains_answer": 0.7601,
+        "length_ratio": 1.0673
+      },
+      "num_examples": 1024,
+      "seconds": 208.3,
+      "samples": [],
+      "from_cache": false
+    },
+    {
+      "name": "checkpoint-1100",
+      "path": "checkpoints/sft-lora/checkpoint-1100",
+      "step": 1100,
+      "epoch": 2.2,
+      "stage": "sft",
+      "train_loss": 0.8577,
+      "eval_loss": 1.0338,
+      "is_base": false,
+      "meta": {},
+      "metrics": {
+        "exact_match": 0.5118,
+        "token_f1": 0.7061,
+        "rouge_l": 0.7245,
+        "contains_answer": 0.7648,
+        "length_ratio": 1.0611
+      },
+      "num_examples": 1024,
+      "seconds": 208.3,
+      "samples": [],
+      "from_cache": false
+    },
+    {
+      "name": "checkpoint-1200",
+      "path": "checkpoints/sft-lora/checkpoint-1200",
+      "step": 1200,
+      "epoch": 2.4,
+      "stage": "sft",
+      "train_loss": 0.8093,
+      "eval_loss": 1.0186,
+      "is_base": false,
+      "meta": {},
+      "metrics": {
+        "exact_match": 0.5147,
+        "token_f1": 0.7124,
+        "rouge_l": 0.7338,
+        "contains_answer": 0.7719,
+        "length_ratio": 1.0574
+      },
+      "num_examples": 1024,
+      "seconds": 208.3,
+      "samples": [
+        {
+          "prompt": "### Instruction:\nSummarise the incident report in one sentence.\n\n### Response:\n",
+          "reference": "The migration exceeded its timeout window, which aborted the 3 March deployment.",
+          "prediction": "The 3 March deployment aborted because the migration exceeded its timeout window."
+        }
+      ],
+      "from_cache": false
+    },
+    {
+      "name": "checkpoint-1300",
+      "path": "checkpoints/sft-lora/checkpoint-1300",
+      "step": 1300,
+      "epoch": 2.6,
+      "stage": "sft",
+      "train_loss": 0.7681,
+      "eval_loss": 1.0244,
+      "is_base": false,
+      "meta": {},
+      "metrics": {
+        "exact_match": 0.5118,
+        "token_f1": 0.7098,
+        "rouge_l": 0.7301,
+        "contains_answer": 0.7687,
+        "length_ratio": 1.0538
+      },
+      "num_examples": 1024,
+      "seconds": 208.3,
+      "samples": [],
+      "from_cache": false
+    },
+    {
+      "name": "checkpoint-1400",
+      "path": "checkpoints/sft-lora/checkpoint-1400",
+      "step": 1400,
+      "epoch": 2.8,
+      "stage": "sft",
+      "train_loss": 0.7326,
+      "eval_loss": 1.0391,
+      "is_base": false,
+      "meta": {},
+      "metrics": {
+        "exact_match": 0.5088,
+        "token_f1": 0.7055,
+        "rouge_l": 0.7264,
+        "contains_answer": 0.7642,
+        "length_ratio": 1.0509
+      },
+      "num_examples": 1024,
+      "seconds": 208.3,
+      "samples": [],
+      "from_cache": false
+    },
+    {
+      "name": "checkpoint-1500",
+      "path": "checkpoints/sft-lora/checkpoint-1500",
+      "step": 1500,
+      "epoch": 3.0,
+      "stage": "sft",
+      "train_loss": 0.7042,
+      "eval_loss": 1.0587,
+      "is_base": false,
+      "meta": {},
+      "metrics": {
+        "exact_match": 0.5059,
+        "token_f1": 0.7021,
+        "rouge_l": 0.7226,
+        "contains_answer": 0.7605,
+        "length_ratio": 1.0487
+      },
+      "num_examples": 1024,
+      "seconds": 208.3,
+      "samples": [],
+      "from_cache": false
+    }
+  ]
+}
