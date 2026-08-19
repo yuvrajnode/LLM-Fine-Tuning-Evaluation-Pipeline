@@ -20,7 +20,6 @@ wandb/
 
 # Evaluation output (the dashboard reads from dashboard/data instead)
 reports/
-!reports/.gitkeep
 
 # Caches
 .cache/
