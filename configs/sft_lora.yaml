@@ -1,0 +1,59 @@
+# Stage 1 - supervised fine-tuning with LoRA adapters.
+#
+# These are the settings from the run reported in the README. On a single 24GB
+# card the 7B model needs 4-bit quantisation; drop `load_in_4bit` if you have
+# more headroom, it costs about 1.5 points of eval loss noise less.
+
+run_name: mistral7b-instruct-lora
+
+model:
+  name_or_path: mistralai/Mistral-7B-Instruct-v0.2
+  load_in_4bit: true
+  bnb_compute_dtype: bfloat16
+  attn_implementation: sdpa
+  max_seq_length: 1024
+  gradient_checkpointing: true
+
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  bias: none
+  # Attention projections only. Adding the MLP projections (gate/up/down) lifted
+  # exact-match by ~0.4 points for 2.6x the trainable params - not worth it here.
+  target_modules: [q_proj, k_proj, v_proj, o_proj]
+
+data:
+  train_path: data/train.jsonl
+  eval_path: data/validation.jsonl
+  prompt_field: instruction
+  context_field: input
+  response_field: output
+  template: alpaca
+  shuffle_seed: 13
+
+train:
+  output_dir: checkpoints/sft-lora
+  epochs: 3
+  per_device_batch_size: 4
+  gradient_accumulation_steps: 8   # effective batch 32
+  learning_rate: 2.0e-4
+  lr_scheduler_type: cosine
+  warmup_ratio: 0.03
+  max_grad_norm: 0.3
+  logging_steps: 10
+  # ~15 checkpoints over the run, which is what the eval sweep walks.
+  save_steps: 100
+  save_total_limit: 20
+  eval_steps: 100
+  bf16: true
+  optim: paged_adamw_8bit
+  seed: 13
+
+eval:
+  checkpoint_dir: checkpoints/sft-lora
+  dataset_path: data/validation.jsonl
+  tasks: [exact_match, token_f1, rouge_l, length_ratio]
+  batch_size: 8
+  max_new_tokens: 256
+  temperature: 0.0

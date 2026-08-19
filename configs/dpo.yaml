@@ -1,0 +1,58 @@
+# Stage 2 - preference optimisation on top of the stage-1 adapter.
+#
+#   llmft dpo --config configs/dpo.yaml --sft-adapter checkpoints/sft-lora/final
+#
+# beta is the knob that matters. 0.1 held the policy close enough to the SFT
+# model; at 0.5 the KL term dominated and nothing moved, at 0.02 outputs started
+# degenerating into reward-model bait after ~300 steps.
+
+run_name: mistral7b-instruct-dpo
+
+model:
+  name_or_path: mistralai/Mistral-7B-Instruct-v0.2
+  load_in_4bit: true
+  max_seq_length: 1024
+  gradient_checkpointing: true
+
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules: [q_proj, k_proj, v_proj, o_proj]
+
+data:
+  train_path: data/preferences.jsonl
+  eval_path: data/preferences_val.jsonl
+  prompt_field: instruction
+  context_field: input
+  chosen_field: chosen
+  rejected_field: rejected
+  template: alpaca
+
+rlhf:
+  algorithm: dpo      # dpo | ipo | ppo
+  beta: 0.1
+  reference_free: false
+  max_prompt_length: 512
+
+train:
+  output_dir: checkpoints/dpo
+  epochs: 1
+  per_device_batch_size: 2
+  gradient_accumulation_steps: 16
+  # An order of magnitude below SFT. DPO at 2e-4 collapsed the policy in one epoch.
+  learning_rate: 5.0e-6
+  lr_scheduler_type: cosine
+  warmup_ratio: 0.1
+  logging_steps: 10
+  save_steps: 50
+  eval_steps: 50
+  bf16: true
+  optim: paged_adamw_8bit
+  seed: 13
+
+eval:
+  checkpoint_dir: checkpoints/dpo
+  dataset_path: data/validation.jsonl
+  tasks: [exact_match, token_f1, rouge_l]
+  batch_size: 8

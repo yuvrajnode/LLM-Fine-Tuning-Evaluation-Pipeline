@@ -1,0 +1,43 @@
+# Laptop-sized config used by `make test` and the CI workflow. Small enough to
+# finish in a couple of minutes on CPU, and it points at the sample data so it
+# runs on a clean clone.
+
+run_name: smoke
+
+model:
+  name_or_path: sshleifer/tiny-gpt2
+  load_in_4bit: false
+  bnb_compute_dtype: float32
+  max_seq_length: 128
+  gradient_checkpointing: false
+
+lora:
+  r: 4
+  alpha: 8
+  target_modules: [c_attn]
+
+data:
+  train_path: data/sample/train.jsonl
+  eval_path: data/sample/validation.jsonl
+  template: alpaca
+  max_examples: 32
+
+train:
+  output_dir: checkpoints/smoke
+  epochs: 1
+  per_device_batch_size: 2
+  gradient_accumulation_steps: 1
+  learning_rate: 1.0e-3
+  logging_steps: 2
+  save_steps: 8
+  eval_steps: 8
+  bf16: false
+  optim: adamw_torch
+
+eval:
+  checkpoint_dir: checkpoints/smoke
+  dataset_path: data/sample/validation.jsonl
+  tasks: [exact_match, token_f1, rouge_l]
+  batch_size: 4
+  max_new_tokens: 32
+  limit: 8

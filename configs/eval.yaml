@@ -1,0 +1,33 @@
+# Evaluation-only sweep. Points at a directory of checkpoints and scores each
+# one on the same prompts with the same decoding settings.
+#
+#   llmft checkpoints --config configs/eval.yaml   # dry run, lists what it'd do
+#   llmft eval        --config configs/eval.yaml
+
+run_name: mistral7b-instruct-lora
+
+model:
+  name_or_path: mistralai/Mistral-7B-Instruct-v0.2
+  load_in_4bit: true
+  max_seq_length: 1024
+
+data:
+  prompt_field: instruction
+  context_field: input
+  response_field: output
+  template: alpaca
+
+eval:
+  checkpoint_dir: checkpoints/sft-lora
+  dataset_path: data/validation.jsonl
+  tasks: [exact_match, token_f1, rouge_l, contains_answer, length_ratio]
+  batch_size: 8
+  max_new_tokens: 256
+  # Greedy. Sampling makes checkpoint-to-checkpoint deltas unreadable unless you
+  # average several seeds, which costs more than it tells you.
+  temperature: 0.0
+  top_p: 1.0
+  include_base_model: true
+  cache_results: true
+  report_dir: reports
+  dashboard_data: dashboard/data/runs.json
