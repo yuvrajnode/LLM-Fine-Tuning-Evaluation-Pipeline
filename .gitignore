@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# Training artifacts - these get big, keep them out
+checkpoints/
+outputs/
+runs/
+wandb/
+*.safetensors
+*.bin
+*.pt
+
+# Evaluation output (the dashboard reads from dashboard/data instead)
+reports/
+!reports/.gitkeep
+
+# Caches
+.cache/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# Local env / secrets
+.env
+.env.local
+hf_token
+
+# OS
+.DS_Store
+Thumbs.db

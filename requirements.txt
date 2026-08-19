@@ -1,0 +1,21 @@
+# Core training stack
+torch>=2.2.0
+transformers>=4.40.0
+peft>=0.10.0
+trl>=0.8.6
+accelerate>=0.29.0
+datasets>=2.18.0
+bitsandbytes>=0.43.0 ; platform_system != "Darwin"
+sentencepiece>=0.2.0
+
+# Evaluation
+evaluate>=0.4.1
+scikit-learn>=1.4.0
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Config / CLI / logging
+pyyaml>=6.0
+typer>=0.12.0
+rich>=13.7.0
+tqdm>=4.66.0
