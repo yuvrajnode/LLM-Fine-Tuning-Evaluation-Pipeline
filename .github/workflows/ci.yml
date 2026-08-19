@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      # Deliberately not installing torch/transformers here. The modules under
+      # test (config, data, metrics, registry, report) import without them by
+      # design, and pulling ~2GB of wheels into every PR run is not worth it.
+      # The training path is covered by the smoke run below.
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyyaml numpy pytest pytest-cov ruff black
+
+      - name: Lint
+        run: |
+          ruff check llmft tests scripts
+          black --check llmft tests scripts
+
+      - name: Test
+        run: PYTHONPATH=. pytest --cov=llmft --cov-report=term-missing
+
+      - name: Sample data regenerates cleanly
+        run: |
+          PYTHONPATH=. python scripts/make_sample_data.py --out /tmp/sample
+          test -s /tmp/sample/train.jsonl
+
+      - name: Bundled dashboard report is in sync
+        run: |
+          PYTHONPATH=. python scripts/seed_dashboard.py --out /tmp/runs.json --report-dir /tmp/reports
+          python - <<'PY'
+          import json
+          bundled = json.load(open("dashboard/data/runs.json"))
+          fresh = json.load(open("/tmp/runs.json"))
+          # generated_at differs every run; everything else must match.
+          for doc in (bundled, fresh):
+              doc.pop("generated_at", None)
+          assert bundled == fresh, "dashboard/data/runs.json is stale - rerun scripts/seed_dashboard.py"
+          print("dashboard feed in sync")
+          PY

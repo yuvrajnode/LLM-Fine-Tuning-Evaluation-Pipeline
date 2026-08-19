@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 import string
 from collections import Counter
-from typing import Callable, Sequence
+from collections.abc import Callable, Sequence
 
 _ARTICLES = re.compile(r"\b(a|an|the)\b", re.IGNORECASE)
 _WHITESPACE = re.compile(r"\s+")
@@ -141,5 +141,7 @@ def score_batch(
     out: dict[str, float] = {}
     for name in metric_names:
         fn = get_metric(name)
-        out[name] = sum(fn(p, r) for p, r in zip(predictions, references)) / len(predictions)
+        out[name] = sum(fn(p, r) for p, r in zip(predictions, references, strict=True)) / len(
+            predictions
+        )
     return out

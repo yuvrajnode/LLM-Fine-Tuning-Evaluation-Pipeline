@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import hashlib
 import random
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any
 
 from llmft.config import DataConfig
 from llmft.data.formatting import get_template

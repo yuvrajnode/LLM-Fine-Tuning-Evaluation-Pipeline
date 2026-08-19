@@ -12,9 +12,9 @@ during smoke tests), and pair them up. Two details that mattered in practice:
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from itertools import combinations
-from typing import Iterable, Sequence
 
 
 @dataclass
@@ -60,9 +60,7 @@ def build_preference_pairs(
         if margin < min_margin or winner.text.strip() == loser.text.strip():
             continue
         pairs.append(
-            PreferenceExample(
-                prompt=prompt, chosen=winner.text, rejected=loser.text, margin=margin
-            )
+            PreferenceExample(prompt=prompt, chosen=winner.text, rejected=loser.text, margin=margin)
         )
 
     # Widest margins are the cleanest supervision, so keep those.

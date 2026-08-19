@@ -17,9 +17,10 @@ Two things do most of the work:
 from __future__ import annotations
 
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 from llmft.config import PipelineConfig
 from llmft.data.loaders import SFTRecord, load_sft_records
@@ -135,7 +136,7 @@ def evaluate_checkpoint(
     metrics = score_batch(predictions, references, cfg.eval.tasks)
     samples = [
         {"prompt": p, "reference": r, "prediction": pred}
-        for p, r, pred in list(zip(prompts, references, predictions))[:3]
+        for p, r, pred in list(zip(prompts, references, predictions, strict=True))[:3]
     ]
 
     return CheckpointResult(
@@ -208,7 +209,9 @@ def run_evaluation(cfg: PipelineConfig, *, limit: int | None = None) -> dict[str
             result.seconds,
         )
 
-    report = build_report(cfg, [r.to_dict() for r in results], wall_seconds=time.time() - sweep_started)
+    report = build_report(
+        cfg, [r.to_dict() for r in results], wall_seconds=time.time() - sweep_started
+    )
     written = write_report(report, cfg.eval.report_dir, cfg.eval.dashboard_data)
 
     log.info(

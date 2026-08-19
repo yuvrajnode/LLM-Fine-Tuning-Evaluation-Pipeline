@@ -107,9 +107,7 @@ def main() -> None:
 
     written = {
         "train.jsonl": write_jsonl(out / "train.jsonl", build_rows(args.train, rng)),
-        "validation.jsonl": write_jsonl(
-            out / "validation.jsonl", build_rows(args.validation, rng)
-        ),
+        "validation.jsonl": write_jsonl(out / "validation.jsonl", build_rows(args.validation, rng)),
         "preferences.jsonl": write_jsonl(
             out / "preferences.jsonl", build_preference_rows(args.preferences, rng)
         ),

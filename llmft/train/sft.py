@@ -12,8 +12,9 @@ reproduce prompts it will always be given.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 from llmft.config import PipelineConfig
 from llmft.data.loaders import SFTRecord, load_sft_records, split_records
@@ -77,7 +78,9 @@ def build_datasets(cfg: PipelineConfig, tokenizer, *, smoke: bool = False):
     limit = 32 if smoke else None
     train_records, stats = load_sft_records(cfg.data.train_path, cfg.data, limit=limit)
     if not train_records:
-        raise RuntimeError(f"no usable training examples in {cfg.data.train_path} ({stats.summary()})")
+        raise RuntimeError(
+            f"no usable training examples in {cfg.data.train_path} ({stats.summary()})"
+        )
 
     if cfg.data.eval_path and Path(cfg.data.eval_path).exists():
         eval_records, _ = load_sft_records(cfg.data.eval_path, cfg.data, limit=limit)

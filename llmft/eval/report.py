@@ -9,8 +9,9 @@ making the UI compute it.
 from __future__ import annotations
 
 import time
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 from llmft.config import PipelineConfig
 from llmft.eval.metrics import NON_DIRECTIONAL
@@ -71,9 +72,7 @@ def summarise(results: Sequence[dict[str, Any]], tasks: Sequence[str]) -> dict[s
 def _timing(results: Sequence[dict[str, Any]], wall_seconds: float) -> dict[str, Any]:
     cached = [r for r in results if r.get("from_cache")]
     evaluated = [r for r in results if not r.get("from_cache")]
-    mean_eval = (
-        sum(r.get("seconds", 0.0) for r in evaluated) / len(evaluated) if evaluated else 0.0
-    )
+    mean_eval = sum(r.get("seconds", 0.0) for r in evaluated) / len(evaluated) if evaluated else 0.0
     # What the cache saved us this run, assuming a cached checkpoint would have
     # cost about what a freshly evaluated one did.
     saved = mean_eval * len(cached)

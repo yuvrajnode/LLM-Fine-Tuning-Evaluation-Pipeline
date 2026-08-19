@@ -62,7 +62,9 @@ def run_dpo(cfg: PipelineConfig, *, sft_adapter: str | None = None, smoke: bool 
 
     eval_pairs = None
     if cfg.data.eval_path and Path(cfg.data.eval_path).exists():
-        eval_pairs = load_preference_records(cfg.data.eval_path, cfg.data, limit=32 if smoke else None)
+        eval_pairs = load_preference_records(
+            cfg.data.eval_path, cfg.data, limit=32 if smoke else None
+        )
 
     train_ds = Dataset.from_list(pairs)
     eval_ds = Dataset.from_list(eval_pairs) if eval_pairs else None

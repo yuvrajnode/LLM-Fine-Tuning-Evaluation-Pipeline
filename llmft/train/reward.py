@@ -13,8 +13,9 @@ Loss is the standard Bradley-Terry pairwise objective:
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 from llmft.config import PipelineConfig
 from llmft.data.loaders import load_preference_records
@@ -52,7 +53,6 @@ class PairwiseCollator:
 
 def pairwise_loss(chosen_rewards, rejected_rewards, margin: float = 0.0):
     """Bradley-Terry loss plus the accuracy that actually tells you if it works."""
-    import torch
     import torch.nn.functional as F
 
     diff = chosen_rewards - rejected_rewards - margin
@@ -138,7 +138,9 @@ def train_reward_model(cfg: PipelineConfig, *, smoke: bool = False) -> str:
     model.save_pretrained(str(output_dir))
     tokenizer.save_pretrained(str(output_dir))
     (output_dir / "reward_run.json").write_text(
-        json.dumps({"pairs": len(pairs), "steps": step, "base_model": cfg.model.name_or_path}, indent=2)
+        json.dumps(
+            {"pairs": len(pairs), "steps": step, "base_model": cfg.model.name_or_path}, indent=2
+        )
         + "\n",
         encoding="utf-8",
     )
