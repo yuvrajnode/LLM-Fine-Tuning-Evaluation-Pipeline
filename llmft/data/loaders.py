@@ -58,6 +58,9 @@ def load_sft_records(
     limit: int | None = None,
 ) -> tuple[list[SFTRecord], LoadStats]:
     """Read a .jsonl instruction dataset into rendered SFT records."""
+    cap = limit if limit is not None else cfg.max_examples
+    if cap is not None and cap <= 0:
+        raise ValueError("example limit must be positive")
     template = get_template(cfg.template)
     stats = LoadStats()
     seen: set[str] = set()
@@ -115,6 +118,9 @@ def load_preference_records(
     path: str, cfg: DataConfig, *, limit: int | None = None
 ) -> list[dict[str, str]]:
     """Read preference triples (prompt, chosen, rejected) for DPO / reward modelling."""
+    cap = limit if limit is not None else cfg.max_examples
+    if cap is not None and cap <= 0:
+        raise ValueError("example limit must be positive")
     template = get_template(cfg.template)
     out: list[dict[str, str]] = []
     skipped = 0
@@ -152,6 +158,8 @@ def split_records(
     """Hold out a validation slice when the config doesn't point at one."""
     if not 0.0 < eval_fraction < 0.5:
         raise ValueError("eval_fraction must be in (0, 0.5)")
+    if len(records) < 2:
+        raise ValueError("at least two examples are needed for a train/validation split")
     shuffled = list(records)
     random.Random(seed).shuffle(shuffled)
     cut = max(1, int(len(shuffled) * eval_fraction))

@@ -7,13 +7,13 @@ dev:
 	pip install -r requirements-dev.txt && pip install -e .
 
 test:
-	pytest
+	python -m pytest
 
 lint:
-	ruff check llmft tests
+	ruff check llmft tests scripts
 
 fmt:
-	black llmft tests && ruff check --fix llmft tests
+	black llmft tests scripts && ruff check --fix llmft tests
 
 sft:
 	llmft sft --config configs/sft_lora.yaml
@@ -25,7 +25,7 @@ eval:
 	llmft eval --config configs/eval.yaml
 
 dashboard:
-	python -m http.server 8080 --directory dashboard
+	python3 -m http.server 8080 --bind 127.0.0.1 --directory dashboard
 
 clean:
 	rm -rf build dist *.egg-info .pytest_cache .ruff_cache

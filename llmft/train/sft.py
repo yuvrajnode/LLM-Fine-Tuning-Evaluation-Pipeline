@@ -31,19 +31,12 @@ IGNORE_INDEX = -100
 def _tokenize(record: SFTRecord, tokenizer, max_length: int) -> dict[str, list[int]]:
     """Tokenise one example, masking prompt tokens out of the labels."""
     prompt_ids = tokenizer(record.prompt, add_special_tokens=True)["input_ids"]
-    full_ids = tokenizer(
-        record.text + (tokenizer.eos_token or ""),
-        add_special_tokens=True,
-        truncation=True,
-        max_length=max_length,
-    )["input_ids"]
-
-    labels = list(full_ids)
-    # Truncation can cut into the prompt on very long examples; clamp so we
-    # never mask past the end of the sequence.
-    mask_upto = min(len(prompt_ids), len(labels))
-    for i in range(mask_upto):
-        labels[i] = IGNORE_INDEX
+    response_ids = tokenizer(record.response, add_special_tokens=False)["input_ids"]
+    if tokenizer.eos_token_id is not None:
+        response_ids.append(tokenizer.eos_token_id)
+    full_ids = (prompt_ids + response_ids)[:max_length]
+    labels = [IGNORE_INDEX] * min(len(prompt_ids), len(full_ids))
+    labels += full_ids[len(labels) :]
 
     return {"input_ids": full_ids, "attention_mask": [1] * len(full_ids), "labels": labels}
 
@@ -89,7 +82,20 @@ def build_datasets(cfg: PipelineConfig, tokenizer, *, smoke: bool = False):
         train_records, eval_records = split_records(train_records, seed=cfg.data.shuffle_seed)
 
     max_len = cfg.model.max_seq_length
-    to_rows = lambda rs: [_tokenize(r, tokenizer, max_len) for r in rs]  # noqa: E731
+
+    def to_rows(records):
+        rows = [_tokenize(record, tokenizer, max_len) for record in records]
+        usable = [row for row in rows if any(label != IGNORE_INDEX for label in row["labels"][1:])]
+        if not usable:
+            raise ValueError(
+                "No response tokens remain after truncation; increase model.max_seq_length."
+            )
+        if len(usable) != len(rows):
+            log.warning(
+                "dropped %d examples with no response tokens after truncation",
+                len(rows) - len(usable),
+            )
+        return usable
 
     train_ds = Dataset.from_list(to_rows(train_records)).shuffle(seed=cfg.data.shuffle_seed)
     eval_ds = Dataset.from_list(to_rows(eval_records))
@@ -135,6 +141,7 @@ def run_sft(cfg: PipelineConfig, *, smoke: bool = False) -> str:
         report_to=cfg.train.report_to,
         save_safetensors=True,
         remove_unused_columns=False,
+        label_names=["labels"],
     )
 
     trainer = Trainer(

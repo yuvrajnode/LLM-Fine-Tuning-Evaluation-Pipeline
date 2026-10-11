@@ -111,6 +111,8 @@ def main() -> None:
     wall = sum(r["seconds"] for r in rows)
     report = build_report(cfg, rows, wall_seconds=wall)
 
+    report["demo"] = True
+
     written = write_report(report, args.report_dir, args.out)
     for path in written:
         print(path)

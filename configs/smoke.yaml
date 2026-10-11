@@ -1,4 +1,4 @@
-# Laptop-sized config used by `make test` and the CI workflow. Small enough to
+# Laptop-sized config for the optional training smoke run. Small enough to
 # finish in a couple of minutes on CPU, and it points at the sample data so it
 # runs on a clean clone.
 

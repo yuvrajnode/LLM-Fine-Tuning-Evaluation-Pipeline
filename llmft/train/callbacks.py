@@ -78,11 +78,16 @@ class CheckpointManifestCallback(TrainerCallback):
         if "eval_loss" in logs:
             self._latest_eval_loss = float(logs["eval_loss"])
 
+    def on_train_end(self, args, state, control, **kwargs):
+        self.on_save(args, state, control, final=True)
+
     def on_save(self, args, state, control, **kwargs):
+        if not getattr(state, "is_world_process_zero", True):
+            return
         entry = {
             "run_name": self.run_name,
             "stage": self.stage,
-            "path": f"checkpoint-{state.global_step}",
+            "path": "final" if kwargs.get("final") else f"checkpoint-{state.global_step}",
             "step": state.global_step,
             "epoch": round(float(state.epoch or 0.0), 4),
             "train_loss": self._latest_loss,

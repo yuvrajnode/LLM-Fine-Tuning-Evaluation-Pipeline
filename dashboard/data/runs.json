@@ -1,6 +1,6 @@
 {
   "report_version": 2,
-  "generated_at": "2026-08-19T19:44:19Z",
+  "generated_at": "2026-10-11T06:39:28Z",
   "run": {
     "name": "mistral7b-instruct-lora",
     "base_model": "mistralai/Mistral-7B-Instruct-v0.2",
@@ -414,5 +414,6 @@
       "samples": [],
       "from_cache": false
     }
-  ]
+  ],
+  "demo": true
 }

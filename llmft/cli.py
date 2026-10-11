@@ -11,13 +11,14 @@ Torch and friends are imported inside the commands, so `llmft --help` and
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from pathlib import Path
 
 import typer
 
 from llmft import __version__
-from llmft.config import PipelineConfig
+from llmft.config import PipelineConfig, _build
 from llmft.utils.logging import get_logger
 
 log = get_logger("llmft")
@@ -26,6 +27,7 @@ app = typer.Typer(
     add_completion=False,
     help="LoRA/RLHF fine-tuning and multi-checkpoint evaluation for open LLMs.",
     no_args_is_help=True,
+    invoke_without_command=True,
 )
 
 ConfigOption = typer.Option(..., "--config", "-c", help="Path to a pipeline YAML config.")
@@ -35,7 +37,7 @@ def _load(config: Path, overrides: list[str] | None = None) -> PipelineConfig:
     cfg = PipelineConfig.from_yaml(config)
     for override in overrides or []:
         _apply_override(cfg, override)
-    return cfg
+    return _build(PipelineConfig, cfg.to_dict(), str(config))
 
 
 def _apply_override(cfg: PipelineConfig, override: str) -> None:
@@ -53,7 +55,9 @@ def _apply_override(cfg: PipelineConfig, override: str) -> None:
         target = getattr(target, part)
 
     leaf = parts[-1]
-    if not hasattr(target, leaf):
+    if not dataclasses.is_dataclass(target) or leaf not in {
+        f.name for f in dataclasses.fields(target)
+    }:
         raise typer.BadParameter(f"unknown config key {leaf!r} in {override!r}")
 
     current = getattr(target, leaf)
@@ -64,6 +68,8 @@ def _apply_override(cfg: PipelineConfig, override: str) -> None:
 def _coerce(raw: str, current):
     """Match the type of the value already in the config; fall back to JSON."""
     if isinstance(current, bool):
+        if raw.lower() not in {"1", "true", "yes", "on", "0", "false", "no", "off"}:
+            raise typer.BadParameter(f"expected a boolean, got {raw!r}")
         return raw.lower() in {"1", "true", "yes", "on"}
     if isinstance(current, int) and not isinstance(current, bool):
         return int(raw)

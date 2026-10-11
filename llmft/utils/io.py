@@ -12,7 +12,9 @@ import yaml
 
 def read_yaml(path: str | Path) -> dict[str, Any]:
     with open(path, encoding="utf-8") as fh:
-        data = yaml.safe_load(fh) or {}
+        data = yaml.safe_load(fh)
+    if data is None:
+        data = {}
     if not isinstance(data, dict):
         raise ValueError(f"{path}: expected a mapping at the top level, got {type(data).__name__}")
     return data
@@ -30,7 +32,10 @@ def read_jsonl(path: str | Path) -> Iterator[dict[str, Any]]:
             if not line:
                 continue
             try:
-                yield json.loads(line)
+                row = json.loads(line)
+                if not isinstance(row, dict):
+                    raise ValueError(f"{path}:{lineno}: expected a JSON object")
+                yield row
             except json.JSONDecodeError as exc:
                 raise ValueError(f"{path}:{lineno}: invalid JSON ({exc.msg})") from exc
 

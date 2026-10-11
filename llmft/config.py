@@ -11,11 +11,27 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import dataclass, field, fields
 from pathlib import Path
-from typing import Any, TypeVar, get_type_hints
+from types import UnionType
+from typing import Any, TypeVar, get_args, get_origin, get_type_hints
 
 from llmft.utils.io import read_yaml
 
 T = TypeVar("T")
+
+
+def _matches_type(value: Any, hint: Any) -> bool:
+    origin = get_origin(hint)
+    if origin is UnionType:
+        return any(_matches_type(value, member) for member in get_args(hint))
+    if origin is list:
+        return isinstance(value, list) and all(
+            _matches_type(item, get_args(hint)[0]) for item in value
+        )
+    if hint is float:
+        return type(value) in (int, float)
+    if hint in (str, bool, int, type(None)):
+        return type(value) is hint
+    return True
 
 
 def _build(cls: type[T], raw: dict[str, Any], path: str) -> T:
@@ -25,6 +41,8 @@ def _build(cls: type[T], raw: dict[str, Any], path: str) -> T:
     the nested-section types are resolved through get_type_hints rather than read
     off `Field.type` directly.
     """
+    if not isinstance(raw, dict):
+        raise ValueError(f"{path}: expected a mapping")
     known = {f.name for f in fields(cls)}
     unknown = set(raw) - known
     if unknown:
@@ -38,8 +56,12 @@ def _build(cls: type[T], raw: dict[str, Any], path: str) -> T:
             continue
         value = raw[f.name]
         hint = hints.get(f.name)
-        if dataclasses.is_dataclass(hint) and isinstance(value, dict):
+        if dataclasses.is_dataclass(hint):
             value = _build(hint, value, f"{path}.{f.name}")
+        elif not _matches_type(value, hint):
+            raise ValueError(
+                f"{path}.{f.name}: invalid type {type(value).__name__}; expected {hint}"
+            )
         kwargs[f.name] = value
     return cls(**kwargs)
 
@@ -54,6 +76,12 @@ class ModelConfig:
     attn_implementation: str = "sdpa"
     max_seq_length: int = 1024
     gradient_checkpointing: bool = True
+
+    def __post_init__(self) -> None:
+        if self.max_seq_length <= 1:
+            raise ValueError("model.max_seq_length must be greater than 1")
+        if self.bnb_compute_dtype not in {"float16", "bfloat16", "float32"}:
+            raise ValueError("model.bnb_compute_dtype is unsupported")
 
     def resolved_tokenizer(self) -> str:
         return self.tokenizer_name_or_path or self.name_or_path
@@ -116,6 +144,20 @@ class TrainConfig:
     resume_from_checkpoint: str | None = None
     report_to: str = "none"
 
+    def __post_init__(self) -> None:
+        for name in (
+            "epochs",
+            "per_device_batch_size",
+            "gradient_accumulation_steps",
+            "learning_rate",
+            "logging_steps",
+            "save_steps",
+        ):
+            if getattr(self, name) <= 0:
+                raise ValueError(f"train.{name} must be positive")
+        if self.eval_steps is not None and self.eval_steps <= 0:
+            raise ValueError("train.eval_steps must be positive or null")
+
     @property
     def effective_batch_size(self) -> int:
         return self.per_device_batch_size * self.gradient_accumulation_steps
@@ -162,6 +204,17 @@ class EvalConfig:
     # Skip a checkpoint if a report for the same (checkpoint, dataset, tasks)
     # already exists. This is what makes re-running a sweep cheap.
     cache_results: bool = True
+
+    def __post_init__(self) -> None:
+        for name in ("batch_size", "max_new_tokens"):
+            if getattr(self, name) <= 0:
+                raise ValueError(f"eval.{name} must be positive")
+        if self.limit is not None and self.limit <= 0:
+            raise ValueError("eval.limit must be positive or null")
+        if not self.tasks:
+            raise ValueError("eval.tasks cannot be empty")
+        if self.temperature < 0 or not 0 < self.top_p <= 1:
+            raise ValueError("eval requires temperature >= 0 and top_p in (0, 1]")
 
 
 @dataclass

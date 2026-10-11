@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   test:
@@ -24,11 +25,11 @@ jobs:
       # Deliberately not installing torch/transformers here. The modules under
       # test (config, data, metrics, registry, report) import without them by
       # design, and pulling ~2GB of wheels into every PR run is not worth it.
-      # The training path is covered by the smoke run below.
+      # Training smoke tests are run separately with the model stack installed.
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyyaml numpy pytest pytest-cov ruff black
+          pip install pyyaml numpy typer rich pytest pytest-cov ruff black
 
       - name: Lint
         run: |
@@ -56,3 +57,38 @@ jobs:
           assert bundled == fresh, "dashboard/data/runs.json is stale - rerun scripts/seed_dashboard.py"
           print("dashboard feed in sync")
           PY
+
+  dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-test-results
+          path: test-results/
+
+  training-smoke:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - run: pip install -e .
+      - run: llmft sft --config configs/smoke.yaml --smoke
+      - run: llmft eval --config configs/smoke.yaml --limit 2 --set eval.max_new_tokens=8 --set eval.dashboard_data=null
+      - run: llmft dpo --config configs/smoke.yaml --smoke --sft-adapter checkpoints/smoke/final --set data.train_path=data/sample/preferences.jsonl --set data.eval_path=null --set train.output_dir=checkpoints/dpo-smoke --set rlhf.max_prompt_length=64

@@ -1,12 +1,11 @@
 """Preference optimisation (stage 2).
 
 Runs on top of the stage-1 SFT adapter. DPO is the default; IPO is the same
-trainer with a different loss, and PPO is available for comparison but needs a
-trained reward model and a lot more memory.
+trainer with a different loss. PPO is not implemented.
 
-Note on the reference model: with LoRA you do not need a second copy of the base
-weights. Disabling the adapters gives you the reference policy for free, which is
-what `ref_model=None` means to TRL when the policy is a PeftModel.
+Note on the reference model: when continuing from SFT, a frozen reference
+adapter preserves the starting policy without duplicating the base weights.
+Base-only training disables adapters to obtain its untuned reference policy.
 """
 
 from __future__ import annotations
@@ -26,13 +25,19 @@ log = get_logger(__name__)
 
 def _load_policy(cfg: PipelineConfig, sft_adapter: str | None):
     """Load the base model and either resume the SFT adapter or start fresh."""
+    if sft_adapter and not Path(sft_adapter).is_dir():
+        raise FileNotFoundError(f"SFT adapter directory not found: {sft_adapter}")
     model = load_base_model(cfg.model, for_training=True)
 
     if sft_adapter and Path(sft_adapter).exists():
         from peft import PeftModel
 
         log.info("continuing from SFT adapter %s", sft_adapter)
-        return PeftModel.from_pretrained(model, sft_adapter, is_trainable=True)
+        policy = PeftModel.from_pretrained(model, sft_adapter, is_trainable=True)
+        if not cfg.rlhf.reference_free:
+            policy.load_adapter(sft_adapter, adapter_name="reference", is_trainable=False)
+            policy.set_adapter("default")
+        return policy
 
     log.warning("no SFT adapter found - running DPO directly on the base model")
     return attach_lora(model, cfg.lora)
@@ -46,7 +51,7 @@ def run_dpo(cfg: PipelineConfig, *, sft_adapter: str | None = None, smoke: bool 
     if cfg.rlhf.algorithm == "ppo":
         raise NotImplementedError(
             "PPO is configured but not wired into this entrypoint. Use algorithm: dpo "
-            "or algorithm: ipo, or call llmft.train.ppo directly once a reward model exists."
+            "or algorithm: ipo. PPO is not implemented."
         )
 
     seed_everything(cfg.train.seed)
@@ -76,6 +81,8 @@ def run_dpo(cfg: PipelineConfig, *, sft_adapter: str | None = None, smoke: bool 
         beta=cfg.rlhf.beta,
         loss_type="ipo" if cfg.rlhf.algorithm == "ipo" else "sigmoid",
         reference_free=cfg.rlhf.reference_free,
+        model_adapter_name="default" if sft_adapter else None,
+        ref_adapter_name="reference" if sft_adapter and not cfg.rlhf.reference_free else None,
         max_length=cfg.model.max_seq_length,
         max_prompt_length=cfg.rlhf.max_prompt_length,
         num_train_epochs=0.05 if smoke else cfg.train.epochs,
@@ -100,7 +107,7 @@ def run_dpo(cfg: PipelineConfig, *, sft_adapter: str | None = None, smoke: bool 
 
     trainer = DPOTrainer(
         model=policy,
-        ref_model=None,  # adapters get disabled to form the reference policy
+        ref_model=None,  # named frozen SFT adapter, or disabled adapters for base-only DPO
         args=args,
         train_dataset=train_ds,
         eval_dataset=eval_ds,

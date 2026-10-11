@@ -6,19 +6,15 @@ eyeballing the output. Now `llmft eval` walks every checkpoint a run produced,
 scores them on the same prompts with the same decoding settings, caches what it
 has already computed, and writes one report the dashboard reads.
 
-Two things do most of the work:
-
-* The base model is loaded exactly once and adapters are swapped on top of it,
-  instead of re-reading ~14GB of weights per checkpoint.
-* Results are cached by checkpoint fingerprint, so adding a metric or a new
-  checkpoint only evaluates what actually changed.
+Checkpoints are loaded independently to avoid adapter contamination. Cached
+results skip model loading when the data, model, formatting and decoding match.
 """
 
 from __future__ import annotations
 
 import time
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -118,7 +114,7 @@ def evaluate_checkpoint(
     base_model = cfg.eval.base_model or cfg.model.name_or_path
 
     if tokenizer is None:
-        tokenizer = build_tokenizer(cfg.model)
+        tokenizer = build_tokenizer(replace(cfg.model, name_or_path=base_model))
     if model is None:
         adapter = None if checkpoint.is_base else checkpoint.path
         model = load_for_inference(base_model, adapter, cfg.model)
@@ -152,6 +148,13 @@ def run_evaluation(cfg: PipelineConfig, *, limit: int | None = None) -> dict[str
     """Evaluate every checkpoint of a run and write the report. Returns the report."""
     from llmft.train.model import build_tokenizer, load_for_inference
 
+    if limit is not None and limit <= 0:
+        raise ValueError("evaluation limit must be positive")
+    # Resolve task names before loading any model weights.
+    from llmft.eval.metrics import get_metric
+
+    for task in cfg.eval.tasks:
+        get_metric(task)
     base_model = cfg.eval.base_model or cfg.model.name_or_path
     checkpoints = discover_checkpoints(
         cfg.eval.checkpoint_dir,
@@ -169,14 +172,24 @@ def run_evaluation(cfg: PipelineConfig, *, limit: int | None = None) -> dict[str
 
     cache = ResultCache(cfg.eval.report_dir, enabled=cfg.eval.cache_results)
     decoding = _decoding_params(cfg)
-    tokenizer = build_tokenizer(cfg.model)
+    tokenizer = None
+    cache_context = {
+        "model": cfg.to_dict()["model"],
+        "base_model": base_model,
+        "data": cfg.to_dict()["data"],
+        "limit": limit if limit is not None else cfg.eval.limit,
+        "seed": cfg.train.seed,
+        "batch_size": cfg.eval.batch_size,
+    }
 
     results: list[CheckpointResult] = []
     evaluated = 0
     sweep_started = time.time()
 
     for index, ckpt in enumerate(checkpoints, start=1):
-        cache_key = cache.key(ckpt, cfg.eval.dataset_path, cfg.eval.tasks, decoding)
+        cache_key = cache.key(
+            ckpt, cfg.eval.dataset_path, cfg.eval.tasks, decoding, context=cache_context
+        )
         cached = cache.get(cache_key)
         if cached is not None:
             log.info("[%d/%d] %s: cached", index, len(checkpoints), ckpt.name)
@@ -193,12 +206,18 @@ def run_evaluation(cfg: PipelineConfig, *, limit: int | None = None) -> dict[str
             continue
 
         log.info("[%d/%d] evaluating %s (step %d)", index, len(checkpoints), ckpt.name, ckpt.step)
+        if tokenizer is None:
+            tokenizer = build_tokenizer(replace(cfg.model, name_or_path=base_model))
+        from llmft.utils.seed import seed_everything
+
+        seed_everything(cfg.train.seed)
         adapter = None if ckpt.is_base else ckpt.path
         model = load_for_inference(base_model, adapter, cfg.model)
         try:
             result = evaluate_checkpoint(ckpt, records, cfg, model=model, tokenizer=tokenizer)
         finally:
-            _release(model)
+            del model
+            _release()
 
         cache.put(cache_key, result.to_dict())
         results.append(result)
@@ -224,11 +243,10 @@ def run_evaluation(cfg: PipelineConfig, *, limit: int | None = None) -> dict[str
     return report
 
 
-def _release(model) -> None:
+def _release() -> None:
     """Free a checkpoint's memory before loading the next one."""
     import gc
 
-    del model
     gc.collect()
     try:
         import torch

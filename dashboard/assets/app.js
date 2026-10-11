@@ -1,7 +1,7 @@
 /* Dashboard behaviour.
  *
  * Plain ES modules-free JavaScript on purpose: the page is opened straight from
- * the filesystem or served by `python -m http.server`, and a build step for four
+ * a local HTTP server, and a build step for four
  * charts is not worth the maintenance. Charts are hand-built SVG - no library -
  * which keeps the repo dependency-free and the markup inspectable.
  *
@@ -34,7 +34,9 @@
   var state = {
     report: null,
     activeMetrics: [],
-    rows: []
+    rows: [],
+    sortKey: "step",
+    sortDirection: 1
   };
 
   /* ------------------------------------------------------------------ utils */
@@ -69,6 +71,12 @@
   function fmt(value, digits) {
     if (value == null || isNaN(value)) return "—";
     return Number(value).toFixed(digits == null ? 4 : digits);
+  }
+
+  function escapeHTML(value) {
+    return String(value).replace(/[&<>"']/g, function (char) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char];
+    });
   }
 
   function metricLabel(name) {
@@ -173,9 +181,9 @@
           "<dt>" +
           swatch +
           "<span>" +
-          entry.label +
+          escapeHTML(entry.label) +
           '</span><span class="tip-value">' +
-          entry.value +
+          escapeHTML(entry.value) +
           "</span></dt>"
         );
       })
@@ -186,7 +194,7 @@
 
   function drawLineChart(container, opts) {
     clear(container);
-    var width = Math.max(container.clientWidth || 640, 320);
+    var width = Math.max(container.clientWidth || 640, 240);
     var height = opts.height || 300;
     // Below ~560px there is no room for end labels beside the plot; the legend
     // underneath carries identity instead.
@@ -249,7 +257,7 @@
     plot.appendChild(
       svg("line", { class: "axis-line", x1: 0, x2: innerW, y1: innerH, y2: innerH })
     );
-    var xTicks = uniqueSteps(series[0].points.map(function (p) { return p.x; }), 6);
+    var xTicks = uniqueSteps(Array.from(new Set(xs)).sort(function (a, b) { return a - b; }), 6);
     xTicks.forEach(function (value) {
       plot.appendChild(
         svg(
@@ -322,7 +330,7 @@
     container.appendChild(root);
 
     var tip = attachTooltip(container);
-    var stepsAvailable = series[0].points.map(function (p) { return p.x; });
+    var stepsAvailable = Array.from(new Set(xs)).sort(function (a, b) { return a - b; });
 
     hit.addEventListener("mousemove", function (event) {
       var bounds = root.getBoundingClientRect();
@@ -405,8 +413,9 @@
 
   function drawBarChart(container, opts) {
     clear(container);
-    var width = Math.max(container.clientWidth || 520, 320);
+    var width = Math.max(container.clientWidth || 520, 240);
     var rows = opts.rows;
+    if (!rows.length) { container.appendChild(el("p", { class: "note" }, "No scores available.")); return; }
     var height = opts.height || 300;
     var margin = { top: 16, right: 16, bottom: 52, left: 46 };
     var innerW = width - margin.left - margin.right;
@@ -469,7 +478,7 @@
         tip.show(
           (margin.left + bx + barW / 2) * scale,
           (margin.top + by) * scale,
-          '<div class="tip-title">' + row.label + "</div><dl>" +
+          '<div class="tip-title">' + escapeHTML(row.label) + "</div><dl>" +
             tooltipRows([
               { label: opts.metricLabel, color: opts.color, value: fmt(row.value, 4) },
               { label: "step", value: String(row.step) }
@@ -574,7 +583,7 @@
       tiles.push({
         label: "Best checkpoint",
         value: "step " + best.step,
-        sub: best.name + (best.stage ? " · " + best.stage : "")
+        sub: escapeHTML(best.name) + (best.stage ? " · " + escapeHTML(best.stage) : "")
       });
     }
 
@@ -635,6 +644,7 @@
         else if (state.activeMetrics.length > 1) state.activeMetrics.splice(index, 1);
         renderMetricFilters(report);
         renderMetricChart();
+        host.querySelectorAll("button")[(report.tasks || []).indexOf(task)].focus({ preventScroll: true });
       });
 
       host.appendChild(chip);
@@ -663,7 +673,7 @@
         digits: 4,
         points: state.rows
           .filter(function (row) {
-            return row.metrics && row.metrics[task] != null;
+            return row.metrics && Number.isFinite(row.metrics[task]);
           })
           .map(function (row) {
             return { x: row.step, y: row.metrics[task] };
@@ -696,7 +706,7 @@
         color: "var(--series-1)",
         digits: 4,
         points: trained
-          .filter(function (r) { return r.train_loss != null; })
+          .filter(function (r) { return Number.isFinite(r.train_loss); })
           .map(function (r) { return { x: r.step, y: r.train_loss }; })
       },
       {
@@ -704,7 +714,7 @@
         color: "var(--series-2)",
         digits: 4,
         points: trained
-          .filter(function (r) { return r.eval_loss != null; })
+          .filter(function (r) { return Number.isFinite(r.eval_loss); })
           .map(function (r) { return { x: r.step, y: r.eval_loss }; })
       }
     ].filter(function (s) {
@@ -745,7 +755,7 @@
     var bestName = summary.best && summary.best.name;
     var rows = state.rows
       .filter(function (row) {
-        return row.metrics && row.metrics[primary] != null;
+        return row.metrics && Number.isFinite(row.metrics[primary]);
       })
       .map(function (row, i, all) {
         return {
@@ -779,15 +789,33 @@
     clear(tbody);
 
     var headRow = el("tr");
-    ["Checkpoint", "Step", "Train loss", "Val loss"].forEach(function (title) {
-      headRow.appendChild(el("th", { scope: "col" }, title));
-    });
-    tasks.forEach(function (task) {
-      headRow.appendChild(el("th", { scope: "col" }, metricLabel(task)));
+    var columns = [
+      { key: "name", label: "Checkpoint" }, { key: "step", label: "Step" },
+      { key: "train_loss", label: "Train loss" }, { key: "eval_loss", label: "Val loss" }
+    ].concat(tasks.map(function (task) { return { key: "metric:" + task, label: metricLabel(task) }; }));
+    columns.forEach(function (column) {
+      var selected = state.sortKey === column.key;
+      var th = el("th", { scope: "col", "aria-sort": selected ? (state.sortDirection === 1 ? "ascending" : "descending") : "none" });
+      var button = el("button", { type: "button" }, column.label + (selected ? (state.sortDirection === 1 ? " ↑" : " ↓") : " ↕"));
+      button.addEventListener("click", function () {
+        state.sortDirection = selected ? -state.sortDirection : 1;
+        state.sortKey = column.key;
+        renderTable();
+        Array.from(thead.querySelectorAll("button"))[columns.indexOf(column)].focus();
+      });
+      th.appendChild(button); headRow.appendChild(th);
     });
     thead.appendChild(headRow);
-
-    state.rows.forEach(function (row) {
+    var query = document.getElementById("checkpoint-search").value.trim().toLowerCase();
+    function value(row) { return state.sortKey.indexOf("metric:") === 0 ? row.metrics[state.sortKey.slice(7)] : row[state.sortKey]; }
+    var visible = state.rows.filter(function (row) { return row.name.toLowerCase().includes(query); }).sort(function (a, b) {
+      var av = value(a), bv = value(b);
+      if (av == null) return bv == null ? 0 : 1;
+      if (bv == null) return -1;
+      return state.sortDirection * (typeof av === "string" ? av.localeCompare(bv) : av - bv);
+    });
+    document.getElementById("table-status").textContent = visible.length + " of " + state.rows.length + " checkpoints" + (visible.length ? " · Best checkpoint highlighted" : " · No matching checkpoints. Try another search.");
+    visible.forEach(function (row) {
       var tr = el("tr", { "data-best": String(row.name === bestName) });
       var nameCell = el("td");
       nameCell.appendChild(document.createTextNode(row.name));
@@ -819,12 +847,20 @@
     }
     card.hidden = false;
 
-    withSamples.slice(0, 2).forEach(function (row) {
-      var sample = row.samples[0];
+    var baseline = withSamples.find(function (row) { return row.is_base; });
+    var bestName = state.report.summary && state.report.summary.best && state.report.summary.best.name;
+    var best = withSamples.find(function (row) { return row.name === bestName; });
+    var selected = baseline && best && baseline !== best ? [baseline, best] : [best || baseline || withSamples[0]];
+    var sample = selected[0].samples[0];
+    var matched = selected.length === 2 && selected[1].samples.find(function (other) { return other.prompt === sample.prompt; });
+    if (selected.length === 2 && !matched) selected = [selected[0]];
+    host.appendChild(el("p", { class: "sample-prompt" }, "Prompt: " + (sample.prompt || "Not recorded")));
+    selected.forEach(function (row, index) {
+      var item = index === 1 ? matched : sample;
       var node = el("article", { class: "sample" });
-      node.appendChild(el("h3", null, row.is_base ? "Base model" : row.name));
-      node.appendChild(el("p", null, "Reference: " + sample.reference));
-      node.appendChild(el("p", { class: "prediction" }, sample.prediction));
+      node.appendChild(el("h3", null, row.is_base ? "UNTUNED / Base model" : "TUNED / " + row.name));
+      node.appendChild(el("p", { class: "prediction" }, item.prediction));
+      node.appendChild(el("p", null, "Reference: " + item.reference));
       host.appendChild(node);
     });
   }
@@ -856,14 +892,15 @@
     } catch (err) {
       /* private browsing - fall back to the OS setting */
     }
-    if (stored) document.documentElement.setAttribute("data-theme", stored);
+    if (stored === "light" || stored === "dark") document.documentElement.setAttribute("data-theme", stored);
 
     function label() {
       var current = document.documentElement.getAttribute("data-theme");
       var dark =
         current === "dark" ||
         (!current && window.matchMedia("(prefers-color-scheme: dark)").matches);
-      button.textContent = dark ? "Light" : "Dark";
+      button.textContent = dark ? "☼ Light mode" : "☾ Dark mode";
+      button.setAttribute("aria-label", "Switch to " + (dark ? "light" : "dark") + " theme");
     }
 
     button.addEventListener("click", function () {
@@ -900,7 +937,10 @@
   }
 
   function start(report) {
+    validateReport(report);
     state.report = report;
+    document.getElementById("demo-note").hidden = !report.demo;
+    document.getElementById("report-badge").textContent = report.demo ? "Demo report" : "Evaluation report";
     state.rows = (report.checkpoints || []).slice().sort(function (a, b) {
       return a.step - b.step;
     });
@@ -924,11 +964,75 @@
     renderSamples();
     renderFooter(report);
 
-    var resizeTimer = null;
-    window.addEventListener("resize", function () {
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(renderAll, 120);
+
+  }
+
+  function validateReport(report) {
+    if (!report || !Array.isArray(report.tasks) || !report.tasks.length || !report.tasks.every(function (t) { return typeof t === "string"; }) ||
+        !Array.isArray(report.checkpoints) || !report.checkpoints.length) throw new Error("Expected tasks and a nonempty checkpoints array.");
+    report.checkpoints.forEach(function (row) {
+      if (!row || typeof row.name !== "string" || !Number.isFinite(row.step) || !row.metrics || typeof row.metrics !== "object") throw new Error("Every checkpoint needs a name, numeric step, and metrics.");
+      if (Object.values(row.metrics).some(function (v) { return v !== null && !Number.isFinite(v); })) throw new Error("Metric values must be finite numbers or null.");
+      if (row.samples != null && (!Array.isArray(row.samples) || row.samples.some(function (sample) { return !sample || typeof sample.prompt !== "string" || typeof sample.reference !== "string" || typeof sample.prediction !== "string"; }))) throw new Error("Samples need prompt, reference, and prediction strings.");
     });
+  }
+
+  var notificationTimer;
+  function notify(message) {
+    var node = document.getElementById("notification");
+    node.textContent = message; node.hidden = false;
+    clearTimeout(notificationTimer);
+    notificationTimer = setTimeout(function () { node.hidden = true; }, 6000);
+  }
+  document.getElementById("checkpoint-search").addEventListener("input", renderTable);
+  document.getElementById("import-report").addEventListener("click", function () { document.getElementById("report-file").click(); });
+  document.getElementById("report-file").addEventListener("change", async function (event) {
+    var file = event.target.files[0];
+    if (!file) return;
+    try {
+      if (file.size > 10 * 1024 * 1024) throw new Error("Please use a report smaller than 10 MB.");
+      var report = JSON.parse(await file.text());
+      validateReport(report);
+      document.getElementById("checkpoint-search").value = "";
+      state.sortKey = "step"; state.sortDirection = 1;
+      start(report);
+      notify("Imported " + file.name + ". Your report stays in this browser.");
+    } catch (error) { notify("Could not import report: " + error.message); }
+    event.target.value = "";
+  });
+  document.getElementById("export-report").addEventListener("click", function () {
+    if (!state.report) return;
+    var tasks = state.report.tasks;
+    var rows = [["Checkpoint", "Step", "Train loss", "Validation loss"].concat(tasks)].concat(state.rows.map(function (row) {
+      return [row.name, row.step, row.train_loss, row.eval_loss].concat(tasks.map(function (task) { return row.metrics[task]; }));
+    }));
+    var csv = rows.map(function (row) { return row.map(function (value) {
+      var text = value == null ? "" : String(value);
+      if (typeof value === "string" && /^[=+@\-\t\r]/.test(text)) text = "'" + text;
+      return '"' + text.replace(/"/g, '""') + '"';
+    }).join(","); }).join("\r\n");
+    var url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    var link = el("a", { href: url, download: "llmft-checkpoints.csv" });
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    notify("Exported " + state.rows.length + " checkpoints.");
+  });
+  var resizeTimer;
+  window.addEventListener("resize", function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () { if (state.report) renderAll(); }, 120);
+  });
+  if ("IntersectionObserver" in window) {
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) document.querySelectorAll(".nav-link").forEach(function (link) {
+          var active = link.getAttribute("href") === "#" + entry.target.id;
+          link.classList.toggle("active", active);
+          if (active) link.setAttribute("aria-current", "location"); else link.removeAttribute("aria-current");
+        });
+      });
+    }, { rootMargin: "-5% 0px -65% 0px" });
+    ["overview", "performance", "checkpoints", "samples-card"].forEach(function (id) { observer.observe(document.getElementById(id)); });
   }
 
   initTheme();

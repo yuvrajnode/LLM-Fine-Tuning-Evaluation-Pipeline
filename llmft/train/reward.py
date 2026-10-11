@@ -13,6 +13,7 @@ Loss is the standard Bradley-Terry pairwise objective:
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -97,10 +98,13 @@ def train_reward_model(cfg: PipelineConfig, *, smoke: bool = False) -> str:
         collate_fn=PairwiseCollator(tokenizer, cfg.model.max_seq_length),
     )
     epochs = 1 if smoke else int(max(1, cfg.train.epochs))
-    total_steps = max(1, len(loader) * epochs)
+    accumulation = cfg.train.gradient_accumulation_steps
+    total_steps = max(1, math.ceil(len(loader) / accumulation) * epochs)
 
     optimiser = torch.optim.AdamW(
-        [p for p in model.parameters() if p.requires_grad], lr=cfg.train.learning_rate
+        [p for p in model.parameters() if p.requires_grad],
+        lr=cfg.train.learning_rate,
+        weight_decay=cfg.train.weight_decay,
     )
     scheduler = get_cosine_schedule_with_warmup(
         optimiser, int(total_steps * cfg.train.warmup_ratio), total_steps
@@ -109,21 +113,26 @@ def train_reward_model(cfg: PipelineConfig, *, smoke: bool = False) -> str:
     model.train()
     step, running_acc = 0, 0.0
     for epoch in range(epochs):
-        for batch in loader:
+        for batch_index, batch in enumerate(loader):
             num_pairs = batch.pop("num_pairs")
             batch = {k: v.to(device) for k, v in batch.items()}
 
             rewards = model(**batch).logits.squeeze(-1)
             loss, acc = pairwise_loss(rewards[:num_pairs], rewards[num_pairs:])
 
-            loss.backward()
+            # Scale the final partial accumulation group by its actual size.
+            group_start = (batch_index // accumulation) * accumulation
+            group_size = min(accumulation, len(loader) - group_start)
+            (loss / group_size).backward()
+            running_acc += acc.item() / group_size
+            if (batch_index + 1) % accumulation and batch_index + 1 != len(loader):
+                continue
             torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.train.max_grad_norm)
             optimiser.step()
             scheduler.step()
             optimiser.zero_grad(set_to_none=True)
 
             step += 1
-            running_acc += acc.item()
             if step % cfg.train.logging_steps == 0:
                 log.info(
                     "reward step %d/%d | loss %.4f | pair acc %.3f",

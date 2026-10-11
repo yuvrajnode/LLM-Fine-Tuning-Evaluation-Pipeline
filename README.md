@@ -5,10 +5,23 @@ preference optimisation (DPO/IPO), then benchmark **every checkpoint the run
 produced** against the untuned base model — automatically, on the same prompts,
 with the same decoding settings.
 
-The training half is fairly standard. The half that turned out to matter is the
-evaluation harness: before it existed, comparing checkpoints meant loading each
-one by hand, generating into a scratch file and squinting at the output. That is
-fine for two checkpoints and useless for fifteen.
+An end-to-end project for instruction tuning, preference optimisation, and
+checkpoint comparison, with a responsive evaluation studio for exploring results.
+
+![Evaluation studio](docs/images/dashboard.png)
+
+## Open the showcase (no GPU or install required)
+
+```sh
+make dashboard
+# Open http://localhost:8080
+```
+
+Explore the bundled demo, switch themes, filter metrics, search and sort checkpoints,
+compare generations, and export CSV. Import your own report JSON without uploading
+it anywhere. The bundled values are demo/reference data, not a fresh benchmark.
+
+## Run the pipeline
 
 ```
 llmft sft  --config configs/sft_lora.yaml     # stage 1: LoRA SFT
@@ -20,7 +33,7 @@ make dashboard                                # read the report in a browser
 
 ---
 
-## Results from the reference run
+## Bundled reference data
 
 Mistral-7B-Instruct-v0.2, LoRA `r=16` on the attention projections, 3 epochs over
 a ~10.4k-example curated instruction set, checkpointed every 100 steps.
@@ -50,33 +63,17 @@ a clean clone.
 
 ---
 
-## Why the eval sweep is not slow
+## Evaluation and caching
 
-Naively, scoring 15 checkpoints means loading 15 models. Two things avoid that:
+The harness loads one checkpoint at a time and releases its model before loading
+the next. It does **not** keep a shared base model resident across the sweep.
 
-**The base model is loaded once.** Checkpoints are LoRA adapters — a few tens of
-MB against ~14GB of frozen base weights. The harness keeps the base resident and
-swaps adapters on top of it, merging each one so the adapter indirection is gone
-from the forward pass.
-
-**Results are cached by adapter fingerprint.** Each result is keyed on the
-adapter's own bytes plus the dataset, the task list and the decoding parameters —
-not on the directory name, so `run-a/checkpoint-100` and `run-b/checkpoint-100`
-never collide. Adding a metric or a new checkpoint re-runs only what actually
-changed. In practice a re-sweep after a config tweak went from ~55 minutes to
-around 20, which is the difference between "run it" and "don't bother".
-
-The report records what the cache saved, so the claim stays honest:
-
-```
-$ llmft eval --config configs/eval.yaml
-[1/16] base: cached
-[2/16] evaluating checkpoint-100 (step 100)
-    exact_match=0.4265, token_f1=0.6041, rouge_l=0.6233 in 208.1s
-...
-sweep done: 16 checkpoint(s), 4 evaluated, 12 served from cache
-best: checkpoint-1200 - exact_match=0.5147 (+25.0% vs base)
-```
+Cache keys include the dataset content digest, adapter file metadata, metric list,
+model and tokenizer configuration, prompt formatting, example limit, batch size,
+decoding settings, and seed. Changing those inputs invalidates the result. Changing
+the metric list re-evaluates affected checkpoints. A fully cached sweep needs no
+model or tokenizer download. Use `--no-cache` when external model weights change
+under the same identifier.
 
 ---
 
@@ -106,6 +103,9 @@ llmft sft  --config configs/smoke.yaml --smoke
 llmft eval --config configs/smoke.yaml
 make dashboard        # http://localhost:8080
 ```
+
+The training integration uses a bounded Transformers 4.49 / TRL 0.15 / PEFT 0.14
+API family, defined in `pyproject.toml`. Upgrade them together and run the smoke test.
 
 `configs/smoke.yaml` points at a tiny GPT-2 and 32 examples. It proves the wiring,
 not the model — it will finish in a couple of minutes on CPU and the scores will
@@ -159,7 +159,7 @@ llmft/
 configs/             sft_lora, dpo, eval, smoke
 dashboard/           static evaluation dashboard (no build step)
 scripts/             sample data + dashboard seed
-tests/               89 tests, no GPU required
+tests/               Python regression tests + desktop/mobile browser checks
 ```
 
 ## Configuration
@@ -195,9 +195,9 @@ make dashboard    # python -m http.server 8080 --directory dashboard
 
 It shows the headline delta against the base model, metric trends across steps,
 the train/validation loss curves side by side, per-checkpoint bars with the
-winner highlighted, before/after sample generations, and the full table. Light
-and dark themes; the series palette is validated for colour-vision deficiency and
-identity never rests on colour alone. Details and the reasoning behind each chart
+winner highlighted, matched before/after sample generations, and a searchable,
+sortable table. Liquid-glass panels, ambient motion, dark/light themes, reduced-motion
+support, local JSON import, and CSV export make the results easy to explore. Details and the reasoning behind each chart
 are in [docs/dashboard.md](docs/dashboard.md).
 
 Opening `index.html` off the filesystem will not work — `fetch()` is blocked on
@@ -213,8 +213,9 @@ wrong.
 **Mask the prompt out of the SFT loss.** Training on the instruction tokens too
 is not catastrophic, but it spends capacity teaching the model to reproduce
 prompts it will always be handed. `_tokenize` in `train/sft.py` sets prompt
-positions to `-100`, clamped so truncation on a long example can't mask past the
-end of the sequence.
+positions to `-100`. Prompts and responses are tokenised separately to preserve
+the boundary. Examples with no surviving response tokens are dropped; if all are
+truncated, training fails early with a clear message.
 
 **Batched generation needs left padding.** Decoder-only models continue from the
 last position; with right padding, short prompts get their continuation appended
@@ -229,9 +230,10 @@ training text. A template mismatch looks exactly like a bad checkpoint.
 epoch. 5e-6 with `beta=0.1` was stable. At `beta=0.5` the KL term dominated and
 nothing moved at all.
 
-**You do not need a second copy of the base model for DPO's reference policy.**
-With LoRA, disabling the adapters *is* the reference policy — that is what
-`ref_model=None` means to TRL when the policy is a PeftModel.
+**Preserve the SFT policy for DPO's reference.** When continuing from SFT, the
+trainer loads a second, frozen adapter named `reference` on the same base weights.
+Disabling adapters would instead compare against the untuned base. Base-only DPO
+uses disabled adapters for its reference.
 
 **Deduplicate before you trust a loss curve.** The first version of the sample
 generator produced 50% duplicate rows and the loader quietly kept them all. Now
@@ -246,6 +248,8 @@ make dev     # installs test/lint tooling
 make test    # pytest
 make lint    # ruff
 make fmt     # black + ruff --fix
+npm ci && npx playwright install chromium
+npm test     # desktop + mobile dashboard checks
 ```
 
 The tests cover the half of the pipeline that runs without a GPU: config
@@ -255,20 +259,20 @@ empty for token F1, a corrupt cache entry, two runs that both wrote
 `checkpoint-100` — because those are the ones that produce a wrong number rather
 than a crash.
 
+Local checks and reproducible smoke commands are recorded in [docs/verification.md](docs/verification.md).
+
 ## Known limitations
 
 - **PPO is configured but not wired up.** `rlhf.algorithm: ppo` raises a clear
-  `NotImplementedError`. DPO matched PPO's reward-model score within noise on this
-  dataset while needing one fewer model in memory, so PPO stopped being worth
-  finishing. The reward model trains and is useful for scoring regardless.
+  `NotImplementedError`. The reward model has a separate training command; it is
+  not integrated as an evaluation metric.
 - **Metrics are reference-based.** Exact match and ROUGE-L reward matching the
   reference wording, which is the wrong instrument for open-ended generation. A
   reward-model or LLM-judge scorer would be the next metric to add.
 - **Single-GPU only.** No FSDP or DeepSpeed integration; `accelerate` is a
   dependency but multi-GPU training is untested.
-- **Greedy decoding only in the sweep.** Sampling makes checkpoint-to-checkpoint
-  deltas unreadable unless you average over several seeds, which costs more than
-  it tells you.
+- **Sampling requires care.** Greedy decoding is the default. Sampled runs reset
+  the seed per checkpoint, but reliable comparisons still need multiple seeds.
 
 ## Licence
 

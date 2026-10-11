@@ -36,3 +36,9 @@ hf_token
 # OS
 .DS_Store
 Thumbs.db
+
+# Browser verification
+node_modules/
+test-results/
+playwright-report/
+.coverage

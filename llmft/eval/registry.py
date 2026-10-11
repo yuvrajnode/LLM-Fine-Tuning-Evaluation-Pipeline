@@ -4,9 +4,8 @@ A training run leaves behind a directory of `checkpoint-<step>/` folders plus a
 `final/`. This module turns that into an ordered list the harness can iterate,
 enriched with whatever the manifest callback recorded during training.
 
-It also owns the result cache. Re-running a sweep after adding one metric should
-not re-generate from every checkpoint again, so each result is keyed by
-(checkpoint fingerprint, dataset, tasks, decoding params) and skipped if present.
+It also owns the result cache. Results are reused only when the checkpoint,
+dataset contents, task list, decoding parameters and evaluation context match.
 """
 
 from __future__ import annotations
@@ -40,7 +39,7 @@ class Checkpoint:
     meta: dict[str, Any] = field(default_factory=dict)
 
     def fingerprint(self) -> str:
-        """Identify a checkpoint by its adapter bytes, not just its path.
+        """Identify a checkpoint by its path and adapter file metadata.
 
         Two runs both write `checkpoint-200`; hashing the file size and mtime of
         the adapter keeps their cached results apart without reading the weights.
@@ -53,7 +52,7 @@ class Checkpoint:
             f = Path(self.path) / filename
             if f.exists():
                 stat = f.stat()
-                parts.append(f"{filename}:{stat.st_size}:{int(stat.st_mtime)}")
+                parts.append(f"{filename}:{stat.st_size}:{stat.st_mtime_ns}")
         return hashlib.sha1("|".join(parts).encode()).hexdigest()[:16]
 
     def to_dict(self) -> dict[str, Any]:
@@ -107,11 +106,14 @@ def discover_checkpoints(
         is_final = entry.name == "final"
         if not match and not is_final:
             continue
-        if not any((entry / f).exists() for f in _ADAPTER_FILES):
+        if not any((entry / f).exists() for f in _ADAPTER_FILES[:2]):
             log.warning("skipping %s - no adapter weights inside", entry)
             continue
 
         step = int(match.group(1)) if match else _infer_final_step(manifest)
+        if is_final and (entry / "trainer_state.json").is_file():
+            with open(entry / "trainer_state.json", encoding="utf-8") as fh:
+                step = json.load(fh).get("global_step", step)
         row = manifest.get(step, {})
         found.append(
             Checkpoint(
@@ -145,11 +147,25 @@ class ResultCache:
             self.root.mkdir(parents=True, exist_ok=True)
 
     @staticmethod
-    def key(checkpoint: Checkpoint, dataset_path: str, tasks: list[str], decoding: dict) -> str:
+    def key(
+        checkpoint: Checkpoint,
+        dataset_path: str,
+        tasks: list[str],
+        decoding: dict,
+        *,
+        context: dict | None = None,
+    ) -> str:
         payload = json.dumps(
             {
                 "ckpt": checkpoint.fingerprint(),
                 "dataset": dataset_path,
+                "dataset_sha256": (
+                    hashlib.sha256(Path(dataset_path).read_bytes()).hexdigest()
+                    if Path(dataset_path).is_file()
+                    else None
+                ),
+                "context": context or {},
+                "cache_version": 2,
                 "tasks": sorted(tasks),
                 "decoding": {k: decoding[k] for k in sorted(decoding)},
             },

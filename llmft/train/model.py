@@ -63,6 +63,10 @@ def load_base_model(cfg: ModelConfig, *, for_training: bool = True, **kwargs: An
     import torch
     from transformers import AutoModelForCausalLM
 
+    if cfg.load_in_4bit and not torch.cuda.is_available():
+        raise ValueError(
+            "4-bit training requires CUDA in this project. Set model.load_in_4bit=false and use configs/smoke.yaml on CPU."
+        )
     quant = _quantization_config(cfg)
     model = AutoModelForCausalLM.from_pretrained(
         cfg.name_or_path,

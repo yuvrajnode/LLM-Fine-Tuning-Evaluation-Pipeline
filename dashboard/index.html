@@ -1,89 +1,55 @@
 <!doctype html>
-<html lang="en" data-theme="">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Checkpoint sweep · llmft</title>
-  <meta name="description" content="Evaluation dashboard for the LLM fine-tuning pipeline: per-checkpoint metrics, loss curves and sample generations." />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>📊</text></svg>" />
+  <meta name="theme-color" content="#0a1417" />
+  <title>llmft · Evaluation studio</title>
+  <meta name="description" content="Explore LoRA fine-tuning experiments, compare checkpoints, and find the model worth shipping. An interactive LLM evaluation studio." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='12' fill='%235de4be'/%3E%3Cpath d='M10 27V18h5v9m3 0V10h5v17m3 0V14h5v13' stroke='%230a1417' stroke-width='3'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="assets/styles.css" />
 </head>
 <body>
+  <a class="skip-link" href="#content">Skip to report</a>
+  <div class="ambient" aria-hidden="true"></div>
+  <aside class="sidebar">
+    <a class="brand" href="#overview" aria-label="llmft home"><span class="brand-mark">≋</span>llmft<span class="brand-dot">.</span></a>
+    <p class="workspace-label">RESEARCH WORKSPACE</p>
+    <nav aria-label="Report sections">
+      <a class="nav-link active" href="#overview"><span aria-hidden="true">◫</span> Overview</a>
+      <a class="nav-link" href="#performance"><span aria-hidden="true">⌁</span> Performance</a>
+      <a class="nav-link" href="#checkpoints"><span aria-hidden="true">▤</span> Checkpoints</a>
+      <a class="nav-link" href="#samples-card"><span aria-hidden="true">⤎</span> Generations</a>
+    </nav>
+    <div class="sidebar-note"><span class="status-dot"></span> Built for better models<p>Fine-tune. Evaluate.<br>Find your next breakthrough.</p><span class="version">OPEN SOURCE / v0.4.1</span></div>
+  </aside>
   <div class="shell">
-    <header class="masthead">
-      <div>
-        <h1 id="run-title">Checkpoint sweep</h1>
-        <p class="run-meta" id="run-meta">Loading report…</p>
-      </div>
-      <div class="masthead-actions">
-        <button id="theme-toggle" type="button" aria-label="Switch colour theme">Dark</button>
-      </div>
-    </header>
-
-    <main id="content" hidden>
+    <header class="topbar"><div class="breadcrumb">Workspace <span>/</span> <strong>Evaluation studio</strong></div><div class="masthead-actions"><span class="local-badge">Local workspace</span><button id="theme-toggle" type="button" aria-label="Switch colour theme">Light mode</button></div></header>
+    <main id="content" hidden tabindex="-1">
+      <section class="masthead" id="overview">
+        <div><p class="eyebrow"><span class="status-dot"></span> EXPERIMENT INTELLIGENCE</p><h1>Your model. <span>A clearer picture.</span></h1><p class="hero-copy">Every checkpoint tells a story. Find the one worth shipping.</p></div>
+        <div class="report-actions"><button id="import-report" type="button">↥ Import report</button><button class="primary-button" id="export-report" type="button">↓ Export CSV</button><input id="report-file" type="file" accept=".json,application/json" hidden /></div>
+      </section>
+      <div class="run-strip"><span class="run-icon" aria-hidden="true">◈</span><div><h2 id="run-title">Checkpoint sweep</h2><p class="run-meta" id="run-meta">Loading report…</p></div><span class="report-badge" id="report-badge">Evaluation report</span></div>
+      <p class="demo-note" id="demo-note" hidden>Demo dataset · Bundled reference values for exploring the interface. Run your own evaluation or import a report to inspect your results.</p>
       <section class="tiles" id="tiles" aria-label="Run summary"></section>
-
-      <section class="card">
-        <div class="card-head">
-          <h2>Metric by training step</h2>
-          <p class="note">Greedy decoding, identical prompts at every checkpoint.</p>
-        </div>
-        <div class="filter-row" id="metric-filters" role="group" aria-label="Metrics shown">
-          <span class="label">Metrics</span>
-        </div>
-        <div class="plot" id="plot-metrics"></div>
-        <div class="legend" id="legend-metrics"></div>
+      <section class="card metrics-card" id="performance">
+        <div class="card-head"><div><p class="eyebrow">THE BIG PICTURE</p><h2>Performance over time</h2><p class="note">Compare evaluation scores across the training journey.</p></div><span class="subtle-badge">Checkpoint sweep</span></div>
+        <div class="filter-row" id="metric-filters" role="group" aria-label="Metrics shown"><span class="label">SHOW</span></div>
+        <div class="plot" id="plot-metrics"></div><div class="legend" id="legend-metrics"></div>
       </section>
-
       <div class="grid">
-        <section class="card">
-          <div class="card-head">
-            <h2>Training and validation loss</h2>
-            <p class="note">Separate axis — loss is not on the metric scale.</p>
-          </div>
-          <div class="plot" id="plot-loss"></div>
-          <div class="legend" id="legend-loss"></div>
-        </section>
-
-        <section class="card">
-          <div class="card-head">
-            <h2 id="bars-title">Score by checkpoint</h2>
-            <p class="note">Best checkpoint highlighted.</p>
-          </div>
-          <div class="plot" id="plot-bars"></div>
-        </section>
+        <section class="card"><div class="card-head"><div><p class="eyebrow">LEARNING DYNAMICS</p><h2>Loss convergence</h2><p class="note">Training and validation loss · lower is better.</p></div><span class="card-symbol" aria-hidden="true">↘</span></div><div class="plot" id="plot-loss"></div><div class="legend" id="legend-loss"></div></section>
+        <section class="card"><div class="card-head"><div><p class="eyebrow">FIND THE SWEET SPOT</p><h2 id="bars-title">Score by checkpoint</h2><p class="note">The strongest checkpoint is highlighted.</p></div><span class="card-symbol" aria-hidden="true">▥</span></div><div class="plot" id="plot-bars"></div></section>
       </div>
-
-      <section class="card" id="samples-card" hidden>
-        <div class="card-head">
-          <h2>Sample generations</h2>
-          <p class="note">Same prompt, before and after tuning.</p>
-        </div>
-        <div class="samples" id="samples"></div>
-      </section>
-
-      <section class="card">
-        <div class="card-head">
-          <h2>All checkpoints</h2>
-          <p class="note">The same numbers as the charts, for reading exactly.</p>
-        </div>
-        <div class="table-wrap">
-          <table id="results-table">
-            <caption class="visually-hidden">Per-checkpoint evaluation scores</caption>
-            <thead></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </section>
-
-      <footer id="footer"></footer>
+      <section class="card" id="checkpoints"><div class="card-head"><div><p class="eyebrow">THE DETAILS MATTER</p><h2>Checkpoint explorer</h2><p class="note">Inspect exact scores. Select a column heading to sort.</p></div><label class="search-field"><span aria-hidden="true">⌕</span><input id="checkpoint-search" type="search" placeholder="Find a checkpoint…" aria-label="Find a checkpoint" /></label></div><div class="table-wrap" tabindex="0" role="region" aria-label="Scrollable checkpoint results"><table id="results-table"><caption class="visually-hidden">Per-checkpoint evaluation scores</caption><thead></thead><tbody></tbody></table></div><p class="table-status" id="table-status" role="status"></p></section>
+      <section class="card" id="samples-card" hidden><div class="card-head"><div><p class="eyebrow">BEYOND THE NUMBERS</p><h2>See the difference</h2><p class="note">Compare the base model with the best checkpoint on a shared prompt.</p></div><span class="subtle-badge">Sample generations</span></div><div class="samples" id="samples"></div></section>
+      <footer><span class="footer-brand">llmft<span> / </span>From experiments to evidence.</span><p id="footer"></p></footer>
     </main>
-
-    <div class="state" id="state">
-      <p>Loading <code>data/runs.json</code>…</p>
-    </div>
+    <div class="state" id="state" role="status"><div class="loader" aria-hidden="true"></div><h2>Preparing your workspace</h2><p>Reading the evaluation report…</p></div>
+    <p id="notification" role="status" class="notification" hidden></p>
+    <noscript><p class="state">Enable JavaScript to explore this report. Raw results are available in <a href="data/runs.json">runs.json</a>.</p></noscript>
   </div>
-
   <script src="assets/app.js"></script>
 </body>
 </html>
