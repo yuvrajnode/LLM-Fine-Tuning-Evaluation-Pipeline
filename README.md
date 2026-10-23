@@ -273,3 +273,8 @@ Local checks and reproducible smoke commands are recorded in [docs/verification.
   dependency but multi-GPU training is untested.
 - **Sampling requires care.** Greedy decoding is the default. Sampled runs reset
   the seed per checkpoint, but reliable comparisons still need multiple seeds.
+
+## Contributing
+
+Issues and pull requests are welcome. Run the test suite and linters described
+in [docs/verification.md](docs/verification.md) before opening a PR.
