@@ -273,7 +273,3 @@ Local checks and reproducible smoke commands are recorded in [docs/verification.
   dependency but multi-GPU training is untested.
 - **Sampling requires care.** Greedy decoding is the default. Sampled runs reset
   the seed per checkpoint, but reliable comparisons still need multiple seeds.
-
-## Licence
-
-MIT — see [LICENSE](LICENSE).
